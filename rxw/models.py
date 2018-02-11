@@ -126,7 +126,7 @@ class ClimateCondition:
         return self._conditions
 
     @conditions.setter
-    def set_conditions(self, new_value: List[Parameter]):
+    def conditions(self, new_value: List[Parameter]):
         self._conditions = new_value
 
 
@@ -141,7 +141,7 @@ class WeatherForecast:
         return self._location
 
     @location.setter
-    def set_loc(self, new_value):
+    def location(self, new_value):
         self._location = new_value
 
     @property
@@ -152,6 +152,6 @@ class WeatherForecast:
     def current(self, new_value: ClimateCondition):
         self._cur_condtition = new_value
 
-    def __init__(selef, location: Location):
+    def __init__(self, location: Location):
         self.location = location
 
