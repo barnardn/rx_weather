@@ -10,6 +10,8 @@ name = "pypi"
 requests = "*"
 rx = "*"
 funcy = "*"
+pytz = "*"
+tzlocal = "*"
 
 
 [dev-packages]

@@ -21,11 +21,11 @@ def default_unit(key: str) -> Unit:
         }
     return units[key] if key in units else None
 
+
 class CurrentConditions:
     """ class to handle communications with OpenWeatherMap """
 
     host = 'api.openweathermap.org'
-
 
     def __init__(self, api_key: str):
         self.api_key = api_key
@@ -33,7 +33,10 @@ class CurrentConditions:
     def fetch(self, zip: str, temp_only: bool=False):
         self.rx_fetch(zip) \
                 .flat_map(lambda js, _: self.parse_weather(js)) \
-                .subscribe(on_next= lambda w: w.display(temp_only))
+                .subscribe(
+                    on_next=lambda w: w.display(temp_only),
+                    on_error=lambda e: self._handle_error(e)        
+                )
 
     def rx_fetch(self, zip: str) -> rx.Observable:
         """
@@ -41,6 +44,7 @@ class CurrentConditions:
         current conditions api request
         """
         url = "http://"+self.host+'/data/2.5/weather'
+        
         def observable(observer):
             params = {'zip': zip, 'appid': self.api_key}
             rsp = requests.get(url, params=params)
@@ -55,27 +59,60 @@ class CurrentConditions:
 
         return rx.Observable.create(observable)
 
-
     def parse_weather(self, json: dict) -> WeatherForecast:
+        """ 
+        extract the various weather readings from the json
+        blob and return a WeatherForecast object 
+        """
+        if len(json) == 0:
+            return rx.Observable.throw(Exception('No Weather Data'))
+            
         location = Location(id=json['id'])
         location.name = json['name']
-        location.country = json['sys']['country']
-        weather = WeatherForecast(location)
-        lat = json['coord']['lat']
-        lon = json['coord']['lon']
-        weather.location.geo_location = GeoPoint(lat,lon)
-        cc = ClimateCondition()
+
+        if 'sys' in json:
+            sys = json['sys']
+            location.country = sys['country']
+            sunrise = SolarTimes.utc_to_localdatetime(sys['sunrise'])
+            sunset = SolarTimes.utc_to_localdatetime(sys['sunset'])
+            pdb.set_trace()
+            location.solar = SolarTimes(sunrise, sunset)
+        else:
+            return rx.Observable.throw(Exception('No Weather Data'))
+            
+        weather = WeatherForecast(location)        
+        
+        if 'coord' in json:
+            lat = json['coord']['lat']
+            lon = json['coord']['lon']
+            weather.location.geo_location = GeoPoint(lat, lon)
+        if 'main' not in json:
+            return rx.Observable.just(weather)
+            
         main = json['main']
+        cc = ClimateCondition()
         cc.temperature = Measurement(main['temp'], default_unit('temp'))
         cc.humidity = Measurement(main['humidity'], default_unit('humidity'))
-        wind = json['wind']
-        speed = Measurement(wind['speed'], default_unit('speed'))
-        dir = Measurement(wind['deg'], default_unit('deg'))
-        cc.wind = Vector(speed, dir)
-        ps = json['weather']
-        params = [Parameter(p['main'],p['description']) for p in ps]
-        cc.conditions = params
+        if 'wind' in json:
+            wind = json['wind']
+            speed = Measurement(wind['speed'], default_unit('speed'))
+            dir = Measurement(wind['deg'], default_unit('deg'))
+            cc.wind = Vector(speed, dir)
+            
+        if 'weather' in json:
+            ps = json['weather']
+            params = [Parameter(p['main'], p['description']) for p in ps]
+            cc.conditions = params
+            
         weather.current = cc
-        return rx.Observable.from_callable(lambda: weather)
+        return rx.Observable.just(weather)
 
-
+    def _handle_error(self, e: Exception): 
+        """ display an error message """
+        if e is requests.HTTPError:
+            if e.response.status_code == 404:
+                print("Unable to find weather at the location specified")
+            else:
+                print("Network error " + e.response.reason)
+        else:
+            print(str(e))

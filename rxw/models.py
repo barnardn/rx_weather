@@ -1,6 +1,8 @@
 import typing
 from typing import List, NewType, NamedTuple
 from datetime import datetime
+import pytz
+import tzlocal
 
 
 class Unit:
@@ -22,22 +24,54 @@ class Unit:
         return u'\N{DEGREE SIGN}'
 
 
-Measurement = NamedTuple( "Measurement",
-                [('value', float),
-                 ('unit', Unit)])
+Measurement = NamedTuple("Measurement",
+                    [('value', float),
+                     ('unit', Unit)])
+
 
 GeoPoint = NamedTuple('GeoPoint',
                       [('lat', float),
                        ('lon', float)])
 
+
 Parameter = NamedTuple('Parameter',
                        [('name', str),
                         ('description', str)])
+
 
 Vector = NamedTuple('Vector',
                     [('magnitude', Measurement),
                      ('direction', Measurement)])
 
+
+class SolarTimes:
+    """ sunrise and sunset times """
+
+    @property
+    def sunrise(self) -> datetime:
+        return self._sunrise
+
+    @sunrise.setter
+    def sunrise(self, new_value: datetime):
+        self._sunrise = new_value
+
+    @property
+    def sunset(self) -> datetime:
+        return self._sunset
+
+    @sunset.setter
+    def sunset(self, new_value: datetime):
+        self._sunset = new_value
+
+    @staticmethod
+    def utc_to_localdatetime(timestamp: float) -> datetime:
+        utc = datetime.utcfromtimestamp(timestamp)
+        ltz = tzlocal.get_localzone()
+        return utc.replace(tzinfo=pytz.utc).astimezone(ltz)
+        
+    def __init__(self, rise: datetime, set: datetime):
+        self._sunrise = rise
+        self._sunset = set
 
 
 class Location:
@@ -67,33 +101,29 @@ class Location:
     def geo_location(self, geo: GeoPoint):
         self._geo = geo
 
+    @property
+    def solar(self) -> SolarTimes:
+        return self._solar
+        
+    @solar.setter
+    def solar(self, new_value: SolarTimes):
+        self._solar = new_value
+
     def __init__(self, id: int):
         self.id = id
 
+    def string_times(self) -> (datetime, datetime):
+        rise = datetime.strftime(self.solar.sunrise, '%-I:%M%p')
+        set = datetime.strftime(self.solar.sunset, '%-I:%M%p')
+        return (rise, set)
+
     def __str__(self):
         str = "{0}, {1}\n".format(self.name, self.country)
-        str += "lat: {0} lon: {1}".format(
+        str += "lat: {0} lon: {1}\n".format(
             self.geo_location.lat, self.geo_location.lon)
+        (rise, set) = self.string_times()
+        str += "sunrise: {}\nsunset: {}".format(rise, set)
         return str
-
-class SolarTimes:
-    """ sunrise and sunset times """
-
-    @property
-    def sunrise(self) -> datetime:
-        return self._sunrise
-
-    @sunrise.setter
-    def sunrise(self, new_value: datetime):
-        self._sunrise = new_value
-
-    @property
-    def sunset(self) -> datetime:
-        return self._sunset
-
-    @sunset.setter
-    def sunset(self, new_value: datetime):
-        self._sunset = new_value
 
 
 class ClimateCondition:
@@ -156,7 +186,6 @@ class ClimateCondition:
         str += "Conditions:\n\t"
         str += ",".join([p.description for p in self.conditions])
         return str
-
 
 
 class WeatherForecast:
