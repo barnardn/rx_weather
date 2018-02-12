@@ -15,16 +15,13 @@ def default_unit(key: str) -> Unit:
     units = {
         'temp': Unit(Unit.degree_symbol()+"C"),
         'deg': Unit(Unit.degree_symbol()),
-        'speed': Unit('kmh'),
+        'speed': Unit('m/sec'),
         'presssure': Unit('hPa'),
         'humidity': Unit('%'),
         }
     return units[key] if key in units else None
 
-def show(wthr):
-    print(wthr)
-
-class CurrentConditionsClient:
+class CurrentConditions:
     """ class to handle communications with OpenWeatherMap """
 
     host = 'api.openweathermap.org'
@@ -33,12 +30,10 @@ class CurrentConditionsClient:
     def __init__(self, api_key: str):
         self.api_key = api_key
 
-# cl.fetch_conditions('49002').subscribe(on_next= lambda r: print(r.json()))
-
-    def fetch(self, zip: str):
+    def fetch(self, zip: str, temp_only: bool=False):
         self.rx_fetch(zip) \
-            .flat_map(lambda js: parse_weather(js)) \
-            .subscribe(on_next= lambda w: show(w))
+                .flat_map(lambda js, _: self.parse_weather(js)) \
+                .subscribe(on_next= lambda w: w.display(temp_only))
 
     def rx_fetch(self, zip: str) -> rx.Observable:
         """
@@ -61,25 +56,26 @@ class CurrentConditionsClient:
         return rx.Observable.create(observable)
 
 
-def parse_weather(json: dict) -> WeatherForecast:
-    location = Location(id=json['id'])
-    location.name = json['name']
-    location.country = json['sys']['country']
-    weather = WeatherForecast(location)
-    lat = json['coord']['lat']
-    lon = json['coord']['lon']
-    weather.location.geo_location = GeoPoint(lat,lon)
-    cc = ClimateCondition()
-    main = json['main']
-    cc.temperature = Measurement(main['temp'], default_unit('temp'))
-    cc.humidity = Measurement(main['humidity'], default_unit('humidity'))
-    wind = json['wind']
-    speed = Measurement(wind['speed'], default_unit('speed'))
-    dir = Measurement(wind['deg'], default_unit('deg'))
-    cc.wind = Vector(speed, dir)
-    ps = json['weather']
-    params = [Parameter(p['main'],p['description']) for p in ps]
-    cc.conditions = params
-    weather.current = cc
-    return rx.Observable.from_callable(lambda: weather)
+    def parse_weather(self, json: dict) -> WeatherForecast:
+        location = Location(id=json['id'])
+        location.name = json['name']
+        location.country = json['sys']['country']
+        weather = WeatherForecast(location)
+        lat = json['coord']['lat']
+        lon = json['coord']['lon']
+        weather.location.geo_location = GeoPoint(lat,lon)
+        cc = ClimateCondition()
+        main = json['main']
+        cc.temperature = Measurement(main['temp'], default_unit('temp'))
+        cc.humidity = Measurement(main['humidity'], default_unit('humidity'))
+        wind = json['wind']
+        speed = Measurement(wind['speed'], default_unit('speed'))
+        dir = Measurement(wind['deg'], default_unit('deg'))
+        cc.wind = Vector(speed, dir)
+        ps = json['weather']
+        params = [Parameter(p['main'],p['description']) for p in ps]
+        cc.conditions = params
+        weather.current = cc
+        return rx.Observable.from_callable(lambda: weather)
+
 

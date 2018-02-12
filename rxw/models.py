@@ -70,6 +70,11 @@ class Location:
     def __init__(self, id: int):
         self.id = id
 
+    def __str__(self):
+        str = "{0}, {1}\n".format(self.name, self.country)
+        str += "lat: {0} lon: {1}".format(
+            self.geo_location.lat, self.geo_location.lon)
+        return str
 
 class SolarTimes:
     """ sunrise and sunset times """
@@ -129,6 +134,30 @@ class ClimateCondition:
     def conditions(self, new_value: List[Parameter]):
         self._conditions = new_value
 
+    def kelvin_to_farenheight(self, k: Measurement) -> Measurement:
+        val = (k.value - 273.15) * 1.8 + 32.0
+        return Measurement(val, Unit(Unit.degree_symbol()+"F"))
+
+    def msec_to_mph(self, msec: Measurement) -> Measurement:
+        val = msec.value * 2.236936
+        return Measurement(val, Unit("mph"))
+
+    def display_temp(self) -> str:
+        tfar = self.kelvin_to_farenheight(self.temperature)
+        str = "{0:.1f}{1}".format(tfar.value, tfar.unit)
+        return str
+
+    def __str__(self):
+        str = "Temperature: {0}\n".format(self.display_temp())
+        str += "Wind Speed:\n"
+        mph = self.msec_to_mph(self.wind.magnitude)
+        str += "\t{0:.1f}{1} at {2}{3}\n".format(mph.value, mph.unit,
+            self.wind.direction.value, self.wind.direction.unit)
+        str += "Conditions:\n\t"
+        str += ",".join([p.description for p in self.conditions])
+        return str
+
+
 
 class WeatherForecast:
     """
@@ -150,8 +179,17 @@ class WeatherForecast:
 
     @current.setter
     def current(self, new_value: ClimateCondition):
-        self._cur_condtition = new_value
+        self._cur_condition = new_value
 
     def __init__(self, location: Location):
         self.location = location
+
+    def display(self, temp_only: bool=False):
+        """ print myself """
+        if temp_only:
+            print("{0}: {1}\n".format(
+                self.location.name, self.current.display_temp()))
+            return
+        print("{0}\n".format(self.location))
+        print("{0}\n".format(self.current))
 
