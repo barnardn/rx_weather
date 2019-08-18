@@ -3,6 +3,7 @@ import typing
 from typing import Any
 import requests
 import rx
+from rx import operators as ops
 import pdb
 from rxw.models import *
 
@@ -31,12 +32,12 @@ class CurrentConditions:
         self.api_key = api_key
 
     def show_for(self, zip: str, temp_only: bool=False):
-        self.rx_fetch(zip) \
-                .flat_map(lambda js, _: self.parse_weather(js)) \
-                .subscribe(
-                    on_next=lambda w: w.display(temp_only),
-                    on_error=lambda e: self._handle_error(e)        
-                )
+        self.rx_fetch(zip).pipe(
+            ops.flat_map(lambda js: self.parse_weather(js))
+        ).subscribe(
+           on_next=lambda w: w.display(temp_only),
+           on_error=lambda e: self._handle_error(e)
+        )
 
     def rx_fetch(self, zip: str) -> rx.Observable:
         """
@@ -44,8 +45,8 @@ class CurrentConditions:
         current conditions api request
         """
         url = "http://"+self.host+'/data/2.5/weather'
-        
-        def observable(observer):
+
+        def observable(observer, scheduler):
             params = {'zip': zip, 'appid': self.api_key}
             rsp = requests.get(url, params=params)
 
@@ -57,21 +58,19 @@ class CurrentConditions:
                 observer.on_error(e)
             return lambda: None
 
-        return rx.Observable.create(observable)
+        return rx.create(observable)
 
     def parse_weather(self, json: dict) -> WeatherForecast:
-        """ 
+        """
         extract the various weather readings from the json
-        blob and return a WeatherForecast object 
-        """        
-        def observable(observer):
+        blob and return a WeatherForecast object
+        """
+        def observable(observer, scheduler):
             try:
                 if len(json) == 0:
                     raise(Exception('No Weather Data'))
-                
                 location = Location(id=json['id'])
                 location.name = json['name']
-                
                 if 'sys' in json:
                     sys = json['sys']
                     location.country = sys['country']
@@ -80,46 +79,45 @@ class CurrentConditions:
                     location.solar = SolarTimes(sunrise, sunset)
                 else:
                     raise Exception("Weather data invalid, missing 'sys'")
-                
-                weather = WeatherForecast(location)        
+                weather = WeatherForecast(location)
                 if 'coord' in json:
                     lat = json['coord']['lat']
                     lon = json['coord']['lon']
                     weather.location.geo_location = GeoPoint(lat, lon)
                 if 'main' not in json:
                     raise Exception("Weather data invalid, missing 'main'")
-                    
+
                 main = json['main']
                 cc = ClimateCondition()
                 cc.temperature = Measurement(
-                    main['temp'], 
+                    main['temp'],
                     default_unit('temp'))
                 cc.humidity = Measurement(
-                    main['humidity'], 
+                    main['humidity'],
                     default_unit('humidity'))
                 if 'wind' in json:
                     wind = json['wind']
                     speed = Measurement(wind['speed'], default_unit('speed'))
                     dir = Measurement(wind['deg'], default_unit('deg'))
                     cc.wind = Vector(speed, dir)
-            
+
                 if 'weather' in json:
                     ps = json['weather']
-                    params = [Parameter(p['main'], p['description']) 
+                    params = [Parameter(p['main'], p['description'])
                                 for p in ps]
-                    cc.conditions = params                                        
-                    
+                    cc.conditions = params
+
                 weather.current = cc
-                
+
             except Exception as e:
                 observer.on_error(e)
             else:
-                observer.on_next(weather) 
+                observer.on_next(weather)
             finally:
                 return lambda: None
-        return rx.Observable.create(observable)
-                
-    def _handle_error(self, e: Exception): 
+        return rx.create(observable)
+
+    def _handle_error(self, e: Exception):
         """ display an error message """
         if type(e) is requests.HTTPError:
             if e.response.status_code == 404:
