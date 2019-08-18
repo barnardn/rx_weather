@@ -1,5 +1,6 @@
 #!/bin/sh
 
+rm build/*
 rm dist/*
 
 echo "Making source package..."

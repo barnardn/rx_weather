@@ -25,7 +25,6 @@ def main():
     args = arg_parser.parse_args()
     cc = CurrentConditions(args.appid)
     cc.show_for(zip=args.zip, temp_only=args.just_temp)
-    cc.show_for(zip=args.zip, temp_only=args.just_temp)
 
 
 if __name__ == '__main__':
